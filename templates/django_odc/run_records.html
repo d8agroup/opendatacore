@@ -1,6 +1,6 @@
 {% for record in run_records %}
     {% if record.status == "error" %}
-        <div class="run-record ui-state-error">
+        <div class="run-record ui-state-error error">
             <i class="icon-warning-sign"></i>
     {% else %}
         <div class="run-record ui-state-default ui-corner-all">
@@ -9,6 +9,16 @@
 
         <span class="created">{{ record.created|date:"D, d b, fa" }}</span>
         <span class="collected">{{ record.statistics.total_items|default:'0' }} items collected</span>
+        {% if record.status == "error" %}
+            <div class="errors hide">
+                {% for error in record.status_messages.errors %}
+                    <p>
+                        <i class="icon-warning-sign"></i>
+                        {{ error }}
+                    </p>
+                {% endfor %}
+            </div>
+        {% endif %}
     </div>
 {% empty %}
     <div class="ui-state-info">

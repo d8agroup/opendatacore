@@ -1,15 +1,27 @@
-from copy import deepcopy
-import json
 import datetime
+import json
+from random import randint
 import time
+from copy import deepcopy
+from hashlib import md5
+
+import feedparser
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
+from django.template.loader import render_to_string
 from django.utils.html import strip_tags
-import feedparser
+import sys
+
 from django_odc.objects import ContentItemAuthor, ContentItem
+from django_odc.utils import format_error
 
 
 class _BaseChannel(object):
+
+    @classmethod
+    def ValidateAndReturnErrors(cls, configuration):
+        # This is designed to be overwritten by subclasses if there is configuration to validate
+        return []
 
     @property
     def configuration(self):
@@ -20,8 +32,149 @@ class _BaseChannel(object):
         pass
 
     def run_polling_aggregation(self, source, configuration, run_record_id):
-        # This is designed to be overwritten by subclasses
+        # This is designed to be overwritten by subclasses that have an aggregation type of 'polling'
         pass
+
+    def return_post_configuration_js(self):
+        # This is designed to be overwritten by subclasses that have an aggregation type of 'polling'
+        post_adapter_configuration_js_name = self._configuration['type'] + ".js"
+        return render_to_string('django_odc/post_adapter_configuration_js/%s' % post_adapter_configuration_js_name)
+
+    def update_test_with_results(self, source, configuration, test_result_id, raw_data):
+        """This is designed to be overwritten by subclasses
+
+        This method must return a boolean indicating if the results were parsed and added to the test results
+        without error.
+        """
+        return True
+
+    def receive_post_data(self, source, configuration, run_record, raw_data):
+        """This is designed to be overwritten by subclasses that have aggregation_type=post_adapter
+
+        This method must return an array of objects based on the data type of the channel
+        """
+        return []
+
+
+class TwitterStreamPostChannel(_BaseChannel):
+    _base_image_url = 'http://cdn1.iconfinder.com/data/icons/yooicons_set01_socialbookmarks'
+    _configuration = {
+        'type': 'twitter_post_v01',
+        'data_type': 'content_v01',
+        'aggregation_type': 'post_adapter',
+        'images': {
+            '16': _base_image_url + '/16/social_twitter_box_blue.png',
+            '24': _base_image_url + '/24/social_twitter_box_blue.png',
+            '32': _base_image_url + '/32/social_twitter_box_blue.png',
+            '48': _base_image_url + '/48/social_twitter_box_blue.png',
+            '64': _base_image_url + '/64/social_twitter_box_blue.png',
+            '128': _base_image_url + '/128/social_twitter_box_blue.png'
+        },
+        'display_name_short': 'Tweet Stream',
+        'display_name_full': 'Twitter Streaming Adapter',
+        'description_short': 'Set up a Streaming POST Adapter for tweets from Twitter',
+        'description_full': 'Use this source to create a POST adapter that you can use to push a stream of tweets to.',
+        'config': {
+            'elements': []
+        }
+    }
+
+    def _parse_incoming_tweet(self, raw_tweet, source):
+        author = ContentItemAuthor()
+        author.display_name = raw_tweet['user']['screen_name']
+        author.id = raw_tweet['user']['id_str']
+        author.profile_image_url = raw_tweet['user']['profile_image_url']
+        content = ContentItem()
+        content.author = author
+        content.id = md5(raw_tweet['id_str']).hexdigest()
+        content.source = source.to_dict()
+        content.title = raw_tweet['text']
+        content.link = 'https://twitter.com/#!/%s/status/%s' % (author.display_name, raw_tweet['id_str'])
+        content.language = raw_tweet['lang']
+        content.created = datetime.datetime.strptime(raw_tweet['created_at'], '%a %b %d %H:%M:%S +0000 %Y')
+        content.add_popularity_metadata(raw_tweet['favorite_count'] + raw_tweet['retweet_count'])
+        return content
+
+    def update_test_with_results(self, source, configuration, test_result_id, raw_data):
+        test = source.sourcetestresult_set.get(id=test_result_id)
+        try:
+            tweets = json.loads(raw_data)
+        except Exception, e:
+            error = format_error(e, sys.exc_info())
+            test.save(status='error', status_messages={'errors': ['The json was malformed', error], 'infos': []})
+            return False
+        if not tweets or not isinstance(tweets, list):
+            test.save(status='error', status_messages={'errors': ['The tweets array was empty'], 'infos': []})
+            return False
+        parsed_data = []
+        for tweet in tweets:
+            try:
+                parsed_data.append(self._parse_incoming_tweet(tweet, source))
+            except Exception, e:
+                error = format_error(e, sys.exc_info())
+                test.save(
+                    status='error',
+                    status_messages={
+                        'errors': ['At least one of the tweets could not be parsed', error], 'infos': []})
+                return False
+        test.save(results=parsed_data)
+        # If the limit has been reached
+        limit = 2
+        number_or_results = len(test.results)
+        if number_or_results >= limit:
+            # Set the test to passed with a nice info message
+            test.save(
+                status='passed',
+                status_messages={
+                    'errors': [],
+                    'infos': ['This test passed as %i tweets were parsed without error.' % number_or_results]})
+        return True
+
+    def run_test(self, source, configuration, test_result_id):
+        # If there is no content after seconds
+        seconds = 60
+        time.sleep(seconds)
+        # Check if the test is not working and quit with an error if this is the case
+        current_test = source.get_current_test_data_results()
+        if current_test.status == 'running' and not current_test.results:
+            source.update_test_data(
+                test_result_id,
+                'error',
+                {'errors': ['This test ran for %i seconds without receiving and content' % seconds], 'infos': []})
+
+    def receive_post_data(self, source, configuration, run_record, raw_data):
+        try:
+            tweets = json.loads(raw_data)
+        except Exception, e:
+            error = format_error(e, sys.exc_info())
+            run_record.update('error', {'errors': ['The json was malformed', error], 'infos': []})
+            return []
+        if not tweets or not isinstance(tweets, list):
+            run_record.update('error', {'errors': ['The tweets array was empty'], 'infos': []})
+            return []
+        parsed_data = []
+        for tweet in tweets:
+            try:
+                parsed_data.append(self._parse_incoming_tweet(tweet, source))
+            except Exception, e:
+                error = format_error(e, sys.exc_info())
+                run_record.update(
+                    'error',
+                    {'errors': ['At least one of the tweets could not be parsed', error], 'infos': []})
+                return []
+        # calculate oldest and youngest
+        oldest = None
+        youngest = None
+        for r in parsed_data:
+            if r.created:
+                if not oldest or r.created < oldest:
+                    oldest = r.created
+                if not youngest or r.created > youngest:
+                    youngest = r.created
+        # Update the stats on the run record
+        run_record.record_statistics(total_item=len(parsed_data), oldest_datetime=oldest, youngest_datetime=youngest)
+        run_record.update('finished', {'errors': [], 'infos': ['%i items collected' % len(parsed_data)]})
+        return parsed_data
 
 
 class FeedChannel(_BaseChannel):
@@ -89,12 +242,13 @@ class FeedChannel(_BaseChannel):
         created = None
         try:
             timestamp = time.mktime(item.get('published_parsed'))
-            created = datetime.datetime.fromtimestamp(timestamp).strftime('%c')
+            created = datetime.datetime.fromtimestamp(timestamp)
         except Exception, e:
             pass
         author = ContentItemAuthor()
         author.display_name = item.get('author', '')
         content = ContentItem()
+        content.id = md5(item.get('link', ('%s' % (time.time() + randint(0, 1000))))).hexdigest()
         content.source = source.to_dict()
         content.author = author
         content.title = strip_tags(item.get('title', ''))
@@ -210,11 +364,10 @@ class FeedChannel(_BaseChannel):
         youngest = None
         for r in results:
             if r.created:
-                created = datetime.datetime.strptime(r.created, '%c')
-                if not oldest or created < oldest:
-                    oldest = created
-                if not youngest or created > youngest:
-                    youngest = created
+                if not oldest or r.created < oldest:
+                    oldest = r.created
+                if not youngest or r.created > youngest:
+                    youngest = r.created
         # Update the stats on the run record
         run_record.record_statistics(total_item=len(results), oldest_datetime=oldest, youngest_datetime=youngest)
         # update the run record

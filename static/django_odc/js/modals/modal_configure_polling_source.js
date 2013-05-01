@@ -66,7 +66,7 @@
     };
 
     //Close
-    $.django_odc_modal_configure_polling_source.close = function() {
+    $.django_odc_modal_configure_polling_source.close = function(prevent_dataset_update) {
 
         //Get a handle on the modal
         var modal = $('#modal-configure-polling-source');
@@ -74,6 +74,15 @@
         //Check init has been called
         if (modal.data('uiDialog') == null)
             $.django_odc_modal_configure_polling_source.init();
+
+        if (prevent_dataset_update == null || !prevent_dataset_update) {
+
+            //Get the dataset id
+            var dataset_id = $.django_odc_modal_configure_polling_source.get_source_configuration().dataset.id;
+
+            //Call the list refresh
+            $.django_odc_datasets.update_dataset(dataset_id);
+        }
 
         //Call the close method on the instance
         modal.django_odc_modal_configure_polling_source('close_modal');
@@ -117,6 +126,32 @@
 
                 //Remove the waiting messages
                 $('#configure-polling-source-test-waiting-message').hide();
+
+                // Attach to the confirm button
+                $('#config-source-confirm-button').click(function(){
+
+                    //Get the source
+                    var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+
+                    //Build the url
+                    var url = URL_POLLING_SOURCE_ANALYSIS.replace('SOURCE_ID', source.id);
+
+                    //Reload the configure html
+                    $('#configure-polling-source-container').load(url)
+                });
+
+                // Attach to the reconfigure button
+                $('#config-source-reconfigure-button').click(function(){
+
+                    //Get the source
+                    var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+
+                    //Build the url
+                    var url = URL_POLLING_SOURCE_CONFIGURE.replace('SOURCE_ID', source.id);
+
+                    //Reload the configure html
+                    $('#configure-polling-source-container').load(url)
+                });
             }
         });
     };
@@ -159,51 +194,60 @@
                 $.django_odc_modal_configure_polling_source.close();
             });
 
-            //Life attach to the submit config button
-            $('#submit-source-config-button').livequery('click', function(){
-
-                //Get a handel on the button
-                var button = $(this);
-
-                //Get a handle on the form
-                var form = button.parents('form:first');
-
-                //serialize the form data
-                var post_data = form.serialize();
-
-                //Show saving
-                $('#configure-polling-source-container').html('<div class="loading"><p><i class="icon-spinner icon-spin"></i> Just checking</p></div>')
-
-                //Slight delay for usability
-                setTimeout(function(){
-
-                    //Get the source config
-                    var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
-
-                    //Build the url
-                    var url = URL_POLLING_SOURCE_CONFIGURE.replace('SOURCE_ID', source.id);
-
-                    //post off the form data
-                    $.post(url, post_data, function(template){
-
-                        //Render the template
-                        $('#configure-polling-source-container').html(template);
-                    });
-                }, 500);
-            });
-
             //Live attach to the showing of the config form
             $('#configure-polling-source-config').livequery(function(){
+
+                //Unbind all
+                $(this).find("*").unbind();
 
                 //Deactivate all the steps
                 $('.configure-polling-source-indicator-step').removeClass('active');
 
                 //Activate the config step
                 $('#configure-polling-source-indicator-config').addClass('active');
+
+                //Attach to the submit config button
+                $('#submit-source-config-button').click(function(){
+
+                    //Unbind all
+                    $(this).find("*").andSelf().unbind();
+
+                    //Get a handel on the button
+                    var button = $(this);
+
+                    //Get a handle on the form
+                    var form = button.parents('form:first');
+
+                    //serialize the form data
+                    var post_data = form.serialize();
+
+                    //Show saving
+                    $('#configure-polling-source-container').html('<div class="loading"><p><i class="icon-spinner icon-spin"></i> Just checking</p></div>')
+
+                    //Slight delay for usability
+                    setTimeout(function(){
+
+                        //Get the source config
+                        var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+
+                        //Build the url
+                        var url = URL_POLLING_SOURCE_CONFIGURE.replace('SOURCE_ID', source.id);
+
+                        //post off the form data
+                        $.post(url, post_data, function(template){
+
+                            //Render the template
+                            $('#configure-polling-source-container').html(template);
+                        });
+                    }, 500);
+                });
             });
 
             //Live attach to the showing of the testing form
             $('#configure-polling-source-test').livequery(function(){
+
+                //Unbind all
+                $(this).find("*").unbind();
 
                 //Deactivate all the steps
                 $('.configure-polling-source-indicator-step').removeClass('active');
@@ -215,61 +259,23 @@
                 $.django_odc_modal_configure_polling_source.poll_for_testing_results(null);
             });
 
-            //Live attach to the showing of the confirmation form
-            $('#configure-polling-source-confirm').livequery(function(){
+            // Live attach to the showing of the analysis form
+            $('#configure-polling-source-analysis').livequery(function(){
+
+                //Unbind all
+                $(this).find("*").unbind();
 
                 //Deactivate all the steps
                 $('.configure-polling-source-indicator-step').removeClass('active');
 
                 //Activate the config step
-                $('#configure-polling-source-indicator-confirm').addClass('active');
-            });
+                $('#configure-polling-source-indicator-analysis').addClass('active');
 
-            //Live attach to the reconfigure button
-            $('#config-source-reconfigure-button').livequery('click', function(){
-
-                //Get the source
-                var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
-
-                //Build the url
-                var url = URL_POLLING_SOURCE_CONFIGURE.replace('SOURCE_ID', source.id);
-
-                //Reload the configure html
-                $('#configure-polling-source-container').load(url)
-            });
-
-            //Live attach to the confirm button
-            $('#config-source-confirm-button').livequery('click', function(){
-
-                //Get the source
-                var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
-
-                //Build the url
-                var url = URL_POLLING_SOURCE_ANALYSIS.replace('SOURCE_ID', source.id);
-
-                //Reload the configure html
-                $('#configure-polling-source-container').load(url)
-            });
-
-            //Get a handle on the analysis container
-            var configure_polling_source_analysis = $('#configure-polling-source-analysis');
-
-            configure_polling_source_analysis
-
-                //Live attach to the showing of the analysis form
-                .livequery(function(){
-
-                    //Deactivate all the steps
-                    $('.configure-polling-source-indicator-step').removeClass('active');
-
-                    //Activate the config step
-                    $('#configure-polling-source-indicator-analysis').addClass('active');
-                })
-
-                .find('.available-service-type')
+                //Attach to all the service types
+                $(this).find('.available-service-type')
 
                     //Live attach to the service mouseover
-                    .livequery('mouseenter', function(){
+                    .mouseenter(function(){
 
                         //Get a handle on the source container
                         var container = $(this);
@@ -292,7 +298,7 @@
                     })
 
                     //Live attach to the service mouseout
-                    .livequery('mouseleave', function(){
+                    .mouseleave(function(){
 
                         //Show the help message
                         $('#service-details-instructions').show();
@@ -309,7 +315,7 @@
                     })
 
                     //Life attach to the click event
-                    .livequery('click', function(){
+                    .click(function(){
 
                         //get a handel on the service
                         var service_container = $(this);
@@ -352,50 +358,76 @@
                         service_container.mouseenter();
                     });
 
-            //Live attach to the confirm analysis button click
-            $('#save-polling-source-analysis-button').livequery('click', function(){
+                $('#save-polling-source-analysis-button').click(function(){
 
-                //Get the source
-                var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+                    //Get the source
+                    var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
 
-                //Build the url
-                var url = URL_POLLING_SOURCE_CONFIRM.replace('SOURCE_ID', source.id);
+                    //Build the url
+                    var url = URL_POLLING_SOURCE_CONFIRM.replace('SOURCE_ID', source.id);
 
-                //Reload the confirm html
-                $('#configure-polling-source-container').load(url);
-            });
-
-            //Live attach to the save and activate button
-            $('#polling-source-confirm-save-and-activate-button').livequery('click', function() {
-
-                //Get the source
-                var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
-
-                //Call the api to activate the source
-                $.get(URL_SOURCE_ACTIVATE.replace('SOURCE_ID', source.id), function(){
-
-                    //Close the modal
-                    $.django_odc_modal_configure_polling_source.close();
-
-                    //Update the dataset object
-                    $.django_odc_datasets.update_dataset(source.dataset.id);
+                    //Reload the confirm html
+                    $('#configure-polling-source-container').load(url);
                 });
             });
 
-            //Live attach to the save and activate button
-            $('#polling-source-confirm-save-button').livequery('click', function() {
+            //Live attach to the showing of the confirmation form
+            $('#configure-polling-source-confirm').livequery(function(){
 
-                //Get the source
-                var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+                //Unbind all
+                $(this).find("*").unbind();
 
-                //Call the api to activate the source
-                $.get(URL_SOURCE_DEACTIVATE.replace('SOURCE_ID', source.id), function(){
+                //Deactivate all the steps
+                $('.configure-polling-source-indicator-step').removeClass('active');
 
-                    //Close the modal
-                    $.django_odc_modal_configure_polling_source.close();
+                //Activate the config step
+                $('#configure-polling-source-indicator-confirm').addClass('active');
 
-                    //Update the dataset object
-                    $.django_odc_datasets.update_dataset(source.dataset.id);
+                // Attach to the save and activate button
+                $('#polling-source-confirm-save-and-activate-button').click(function() {
+
+                    //Get the source
+                    var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+
+                    //Call the api to activate the source
+                    $.get(URL_SOURCE_ACTIVATE.replace('SOURCE_ID', source.id), function(){
+
+                        //Close the modal preventing the normal updat
+                        $.django_odc_modal_configure_polling_source.close(true);
+
+                        //Update the dataset object
+                        $.django_odc_datasets.update_dataset(source.dataset.id);
+                    });
+                });
+
+                // Attach to the save and activate button
+                $('#polling-source-confirm-save-button').click(function() {
+
+                    //Get the source
+                    var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+
+                    //Call the api to activate the source
+                    $.get(URL_SOURCE_DEACTIVATE.replace('SOURCE_ID', source.id), function(){
+
+                        //Close the modal prventing the normal dataset update
+                        $.django_odc_modal_configure_polling_source.close(true);
+
+                        //Update the dataset object
+                        $.django_odc_datasets.update_dataset(source.dataset.id);
+                    });
+                });
+
+                // Attach to the reconfigure button
+                $('#polling-config-source-reconfigure-button').click(function(){
+
+                    //Get the source
+                    var source = $.django_odc_modal_configure_polling_source.get_source_configuration();
+
+                    //Build the url
+                    var url = URL_POLLING_SOURCE_CONFIGURE.replace('SOURCE_ID', source.id);
+
+                    //Reload the configure html
+                    $('#configure-polling-source-container').load(url)
                 });
             });
         },

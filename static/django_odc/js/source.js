@@ -55,6 +55,58 @@
                     //Open the configure polling source modal
                     $.django_odc_modal_configure_polling_source.open(source);
                 }
+                if (source.channel.aggregation_type == 'post_adapter'){
+
+                    //This is a post adapter type channel so open the right modal
+                    $.django_odc_modal_configure_post_adapter_source.open(source);
+                }
+            });
+
+            // Attach to the delete button
+            container.find('.dataset-source-action-delete').click(function(){
+
+                //Get a handel on the button
+                var button = $(this);
+
+                //Get a handle on the parent source container
+                var source_container = button.parents('.dataset-source:first');
+
+                //Get the source data
+                var source = source_container.data('source');
+
+                // Get a handel on the dataset
+                var dataset_container = source_container.parents('.dataset:first');
+
+                //Call the api to activate the source
+                var callback = function() {
+
+                    // Apply the loading message
+                    dataset_container.django_odc_loading('apply', 'Deleting Source');
+
+                    //Delay for usable UI
+                    setTimeout(function(){
+                        $.get(URL_SOURCE_DELETE.replace('SOURCE_ID', source.id), function(){
+
+                            //Remove the loading mask
+                            dataset_container.django_odc_loading('remove');
+
+                            //Update the dataset object
+                            $.django_odc_datasets.update_dataset(source.dataset.id);
+                        });
+                    }, 1000);
+                };
+
+                //Build the confirmation modal data
+                var confirmation_data = {
+                    title: 'Do you really want to do that?',
+                    question: 'Are you sure you want to delete this source?',
+                    help_message: 'All data associated with this source will be gone for good',
+                    confirm_callback: callback
+                };
+
+                //Call the confirm modal
+                $.django_odc_modal_confirmation.open(confirmation_data);
+
             });
 
             //Live attach to the activate source button

@@ -39,12 +39,15 @@ class Solr4xDataContent(_BaseDataContext):
         items_per_minute = []
         sources = dataset.source_set.all()
         for source in sources:
-            results = connection.query(q='source_id_s:%s' % source.id, stats='on', stats_field='created_dt')
-            stats['total_items'] += results._numFound
-            created_max = results.stats['stats_fields']['created_dt']['max']
-            created_min = results.stats['stats_fields']['created_dt']['min']
-            total_minutes = (float((created_max - created_min).seconds) / 60) or 1
-            items_per_minute.append(float(stats['total_items']) / total_minutes)
+            try:
+                results = connection.query(q='source_id_s:%s' % source.id, stats='on', stats_field='created_dt')
+                stats['total_items'] += results._numFound
+                created_max = results.stats['stats_fields']['created_dt']['max']
+                created_min = results.stats['stats_fields']['created_dt']['min']
+                total_minutes = (float((created_max - created_min).seconds) / 60) or 1
+                items_per_minute.append(float(stats['total_items']) / total_minutes)
+            except Exception, e:
+                pass
         stats['aggregate_items_per_minute'] = sum(items_per_minute) / len(sources)
 
         return stats
@@ -52,7 +55,7 @@ class Solr4xDataContent(_BaseDataContext):
     def _parse_data(self, d):
         data_type = d.source['channel']['data_type']
         if data_type == 'content_v01':
-            created = make_aware(datetime.datetime.strptime(d.created, '%c'), get_current_timezone())
+            created = make_aware(d.created, get_current_timezone())
             parsed_data = {
                 'data_type_s': data_type,
                 'source_id_s': d.source['id'],

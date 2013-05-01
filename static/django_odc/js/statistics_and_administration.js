@@ -80,6 +80,19 @@
                     list_container
                         .django_odc_loading('remove')
                         .html(template);
+
+                    //Attach mouseover and leave to all the errors
+                    list_container.find('.run-record.error').click(function(){
+
+                            //Get a handel on the errors
+                            var errors = $(this).find('.errors');
+
+                            //If they are visible, hide them
+                            if (errors.is(':visible'))
+                                errors.slideUp();
+                            else
+                                errors.slideDown();
+                        });
                 });
             }, 1000);
         }

@@ -9,7 +9,9 @@ from django.db import models
 from django.utils.timezone import now
 
 import channels
+from django_odc.objects import ContentItem
 from django_odc.settingsbridge import access_settings
+from django_odc.utils import async, format_error
 import services
 import datacontext
 
@@ -26,8 +28,8 @@ class Dataset(models.Model):
     def Create(cls, user):
         # Create a new dataset with default values
         dataset = Dataset(
-            user=user, # The current user
-            created=now(), # Created now
+            user=user,  # The current user
+            created=now(),  # Created now
             modified=now())  # Modified now
         # Call save to cause validation
         dataset.save()
@@ -122,7 +124,7 @@ class Dataset(models.Model):
 
     def sources_configuration(self):
         # Get any source objects associated with this dataset
-        sources = self.source_set.all()
+        sources = self.source_set.exclude(status='deleted').all()
         # Extract and json decode
         configuration = [s.to_dict() for s in sources]
         # Return the configuration array
@@ -368,13 +370,21 @@ class Source(models.Model):
                 [e for e in elements if e['name'] == key][0]['value'] = updated_data.get(key, '')
                 # Reset the config
             self.channel = configuration
-            # Call validate to update status and status messages but skip validate config if first save (modified == None)
+        # Call validate to update status and status messages but skip validate config if first save
         if not skip_validation:
             self.validate(validate_config=self.modified)
             # Set the last modified time to now
         self.modified = now()
         # Save the object
         super(Source, self).save(*args, **kwargs)
+
+    def delete(self, force_delete=False, using=None):
+        # Intercept the delete signal and mark as deleted
+        if force_delete:
+            super(Source, self).delete(using)
+        else:
+            self.status = 'deleted'
+            self.save(skip_validation=True)
 
     def to_dict(self):
         return {
@@ -388,14 +398,64 @@ class Source(models.Model):
     def to_json(self):
         return json.dumps(self.to_dict())
 
+    @async
     def begin_get_and_parse_test_data(self):
         # Mark all previous tests as inactive
         for test_result in self.sourcetestresult_set.all():
             test_result.mark_as_inactive()
-            # Create a new test results object for this test
+        # Create a new test results object for this test
         test_result = SourceTestResult.Create(self)
+        #yield the test id
+        yield test_result.id
         # LONG RUNNING - Call the underlying channel to start a new test
         self._underlying_channel().run_test(self, self.channel, test_result.id)
+
+    def update_with_raw_data(self, raw_data):
+        # If this source is not active say so
+        if self.status != 'active':
+            return {
+                'status': 'error',
+                'errors': ['The source you are trying to send data to is not currently active.']}
+        # Get any currently running run records
+        run_records = [r for r in self.sourcerunrecord_set.filter(status='running').all()]
+        # If there none or is more then one then kill them all
+        if not len(run_records) or len(run_records) > 1:
+            [r.kill('Overlapping runs called') for r in run_records]
+            # And create a new one
+            record = SourceRunRecord.Create(self)
+        else:
+            record = run_records[0]
+        # Call the channel to update the test
+        data = self._underlying_channel().receive_post_data(self, self.channel, record, raw_data)
+        # Send this data to the dataset
+        self.dataset.send_data_to_datasetore(data)
+        # Return an ok signal
+        return {'status': 'ok'}
+
+    def update_test_with_raw_data(self, test_id, raw_data):
+        # Get the current test
+        test = self.get_current_test_data_results()
+        # If the ids don't match then quit with an error
+        if not test or test_id != ('%s' % test.id):
+            return {
+                'status': 'error',
+                'errors': ['No test could be found for the provided test id %s' % test_id]}
+        # If the test is not running
+        if not test.status == 'running':
+            return {
+                'status': 'error',
+                'errors': [
+                    'The test you are trying to add data (with test id: %s) is not currently '
+                    'running, please stop sending data to this test.' % test_id]}
+        # Call the channel to update the test
+        passed = self._underlying_channel().update_test_with_results(self, self.channel, test_id, raw_data)
+        if passed:
+            return {'status': 'ok'}
+        else:
+            # re get the test data
+            test = self.sourcetestresult_set.get(id=test_id)
+            # Return an api error and any errors from the test
+            return {'status': 'error', 'errors': test.status_messages['errors']}
 
     def get_current_test_data_results(self):
         try:
@@ -451,7 +511,11 @@ class Source(models.Model):
             # Call the channel to return any new data
             data = channel.run_polling_aggregation(self, self.channel, record)
         except Exception, e:
-            record.update('error', {'errors': ['There was a system error in this run', '%s' % e], 'infos': []})
+            record.update(
+                'error',
+                {'errors': [
+                    'There was a system error in this run',
+                    format_error(e, sys.exc_info())], 'infos': []})
         finally:
             if record.status == 'running':
                 record.update('error', {'errors': ['This run did not finish correctly'], 'infos': []})
@@ -466,6 +530,12 @@ class Source(models.Model):
         self.dataset.save()
         # Return the results to the dataset
         return data
+
+    def get_post_adapter_instructions(self):
+        # Get the underlying channel
+        channel = self._underlying_channel()
+        # Return the instruction
+        return channel.return_post_configuration_js()
 
     def kill(self):
         # If this is not running then just quit
@@ -490,7 +560,7 @@ class SourceTestResult(models.Model):
     active = models.BooleanField(default=True)  # If this is the active test
     status = models.TextField()  # Used to store the current state of the test run
     _status_messages = models.TextField(default='{}')  # Used to store a JSON version of the status messages
-    _results = models.TextField(default='{}')  # Used to store the JSON version of the actual results
+    _results = models.TextField(default='[]')  # Used to store the JSON version of the actual results
 
     @classmethod
     def Create(cls, source):
@@ -529,7 +599,8 @@ class SourceTestResult(models.Model):
 
     @results.setter
     def results(self, value):
-        self._results = json.dumps(value)
+        results_array = [v.to_dict() for v in value] if value else []
+        self._results = json.dumps(results_array)
 
     def mark_as_inactive(self):
         self.active = False
@@ -551,8 +622,11 @@ class SourceTestResult(models.Model):
             self.status_messages = kwargs.pop('status_messages')
             # Update the results if provided
         if 'results' in kwargs:
-            self.results = kwargs.pop('results')
-            # Set the last modified time to now
+            results = kwargs.pop('results')
+            if results and isinstance(results, list):
+                aggregated_results = [ContentItem.FromDict(r) for r in self.results] + results
+                self.results = aggregated_results
+        # Set the last modified time to now
         self.modified = now()
         # Save the object
         super(SourceTestResult, self).save(*args, **kwargs)
@@ -609,7 +683,7 @@ class SourceRunRecord(models.Model):
             if oldest_datetime and isinstance(oldest_datetime, datetime.datetime) and \
                     youngest_datetime and isinstance(youngest_datetime, datetime.datetime):
                 # Calculate the imp
-                total_time_difference = (oldest_datetime - youngest_datetime).seconds
+                total_time_difference = (oldest_datetime - youngest_datetime).seconds or 1
                 seconds_per_item = float(total_time_difference) / total_item
                 items_per_minute = 60.0 / seconds_per_item
                 stats['ipm'] = items_per_minute

@@ -141,6 +141,11 @@
                         //This is a polling type channel so open the configure_polling_source modal
                         $.django_odc_modal_configure_polling_source.open_with_channel(channel_data);
                     }
+                    if (channel.aggregation_type == 'post_adapter'){
+
+                        //This is a post adapter type channel so open the right modal
+                        $.django_odc_modal_configure_post_adapter_source.open_with_channel(channel_data);
+                    }
                     //TODO: Add support for more aggregation types
                 });
         },

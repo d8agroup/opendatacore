@@ -9,6 +9,9 @@
 #administration-table .btn { float:right;}
 #run-records-list { position: relative; height:200px; padding:5px 10px; margin-right:10px; overflow:scroll; overflow-x: hidden;}
 .run-record { padding:10px; margin:0 0 5px;}
+.run-record.error {cursor:pointer; }
+.run-record .errors { margin:20px 0 0 20px; }
+.run-record .errors i { margin-left:20px;}
 
 /* CONTENT ITEMS */
 .content-item { margin-bottom:10px; border-bottom:1px solid #DDD; padding-bottom:10px; }
@@ -34,6 +37,7 @@
 .loading { text-align:center;}
 .loading-mask { position: absolute; top:-1px; left:-1px; background-color:rgb(240,240,240); background-color:rgba(240, 240, 240, 0.6); text-align:center; border:1px solid #DDD; }
 .loading-mask p { font-size:200%; background-color:#EEE; display:inline-block; padding:10px;}
+#configure-post-adapter-source-container .loading-mask { width:555px !important;  height:255px !important; left:1px !important; top:1px; }
 
 .expanded .expand-icon      { display:none; }
 .expanded .collapse-icon    { display:inline-block; }
@@ -79,6 +83,37 @@ h4 > .btn    { float:right; font-weight:normal; position:relative; bottom:3px; }
 .no-dataset-sources i.icon-arrow-up     { float:right; font-size:58px; padding-right:15px; color:#888; }
 .no-dataset-sources-message             { width:60%; padding:5px 10px; margin-left:10%;}
 
+/* CONFIGURE POST ADAPTER SOURCE MODAL */
+#configure-post-adapter-source-indicator { border-bottom:1px solid #DDD; padding-bottom:10px;}
+#configure-post-adapter-source-channel-type-image { width:32px; height: 32px; display:block; float:left; margin:0 10px 0 30px; }
+.configure-post-adapter-source-indicator-step { text-align:center; color:#DDD; width:110px; float:left;}
+.configure-post-adapter-source-indicator-step.active { color:#000; }
+#configure-post-adapter-source-indicator .number { font-size:30px; position:relative; top:5px; padding-right:10px;}
+#configure-post-adapter-source-container { height:260px; overflow:auto; position:relative;}
+#configure-post-adapter-source-container > .loading { font-size:300%; color:#888; margin-top:80px;}
+#configure-post-adapter-source-container form { width:520px; margin:10px auto; }
+#configure-post-adapter-source-container fieldset { width:420px; margin:10px auto; }
+#configure-post-adapter-source-container fieldset > .help-block { margin:10px 0 20px;}
+#configure-post-adapter-source-container .elements-container { height:200px; overflow:auto; margin-bottom:10px;}
+#submit-source-config-button { margin-left:40px;}
+#configure-post-adapter-source-test { width:420px; margin:10px auto;}
+#configure-post-adapter-source-test .ui-state-info a { font-weight:bold; }
+#post-adapter-source-test-feedback { display:block; padding:10px; margin-top:20px;}
+#post-adapter-source-test-feedback i { margin-right:10px;}
+#post-adapter-source-test-actions { text-align:right; }
+#post-adapter-source-test-actions .btn { margin:10px 0 0 2px}
+#post-adapter-test-results-container { margin: 20px 0}
+#configure-post-adapter-source-analysis { width:520px; margin: 0 auto; }
+#post-adapter-source-confirm-post-adapter-source-image { width:128px; height:128px; float:left; }
+#post-adapter-source-confirm-analysis-container { float:right; width:380px; padding:10px; height:105px;}
+#post-adapter-source-confirm-analysis-container h5 { margin:0 0 10px;}
+#post-adapter-source-confirm-analysis-container .ui-state-info { width:80%;}
+.post-adapter-source-confirm-analysis-service { float:left; margin:5px; }
+#configure-post-adapter-source-confirm p { margin:5px;}
+#configure-post-adapter-source-confirm p label { display:inline-block; font-size:90%; width:150px; text-align:right; padding-right:10px;}
+#configure-post-adapter-source-confirm .btn { float:right; margin:2px 10px 2px 2px;}
+#configure-post-adapter-source-confirm > .ui-state-info { width:90%; margin:20px auto;}
+
 /* CONFIGURE POLLING SOURCES MODAL */
 #configure-polling-source-indicator { border-bottom:1px solid #DDD; padding-bottom:10px;}
 #configure-polling-source-channel-type-image { width:32px; height: 32px; display:block; float:left; margin:0 10px 0 30px; }
@@ -112,7 +147,7 @@ h4 > .btn    { float:right; font-weight:normal; position:relative; bottom:3px; }
 #service-details-instructions { margin:20px 20px 0 20px; font-size:26px; line-height:26px; color:#999; }
 #service-details-display-name { margin:10px 20px; font-size:36px; line-height:100%; }
 #service-details-description  { margin:10px 20px; font-size:16px; line-height:100%; color:#555; }
-#polling-source-confirm-source-image { width:128px; height:128px; float:left; }
+#polling-source-confirm-polling-source-image { width:128px; height:128px; float:left; }
 #polling-source-confirm-analysis-container { float:right; width:380px; padding:10px; height:105px;}
 #polling-source-confirm-analysis-container h5 { margin:0 0 10px;}
 #polling-source-confirm-analysis-container .ui-state-info { width:80%;}
@@ -120,7 +155,6 @@ h4 > .btn    { float:right; font-weight:normal; position:relative; bottom:3px; }
 #configure-polling-source-confirm p { margin:5px;}
 #configure-polling-source-confirm p label { display:inline-block; font-size:90%; width:150px; text-align:right; padding-right:10px;}
 #configure-polling-source-confirm a { float:right; margin:2px 10px 2px 2px;}
-
 
 /* VENDOR OVERRIDES */
 .btn-info, .btn-warning, .btn-danger { color:#FFF !important; }

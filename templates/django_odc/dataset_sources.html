@@ -9,6 +9,7 @@
             {% if source.status == 'active' or source.status == 'running' %}
                 <a class="btn btn-info btn-mini tipped dataset-source-action-deactivate" title="deactivate"><i class="icon-off"></i></a>
             {% endif %}
+            <a class="btn btn-danger btn-mini tipped dataset-source-action-delete" title="delete"><i class="icon-trash"></i></a>
         </div>
         <img src="{{ source.channel.images.128 }}" />
         <div class="dataset-source-services-container clearfix">
@@ -21,6 +22,9 @@
             {% endif %}
         </div>
         <p class="display_name">{{ source.display_name }}</p>
+        {% if source.status == 'unconfigured' %}
+            <span class="label"><i class="icon-off"></i> unconfigured</span>
+        {% endif %}
         {% if source.status == 'inactive' %}
             <span class="label"><i class="icon-off"></i> inactive</span>
         {% endif %}
