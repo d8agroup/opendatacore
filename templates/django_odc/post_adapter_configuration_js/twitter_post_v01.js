@@ -61,7 +61,7 @@ RUNNING = True
 TWEETS = []
 
 """ Set these """
-URL = ''
+URL = 'http://localhost:8000/odc/source/11/post'
 TWITTER_USERNAME = ""
 TWITTER_PASSWORD = ""
 
@@ -76,7 +76,7 @@ def async(gen):
     return func
 
 
-def make_request(test_id, data):
+def make_request(data):
     global RUNNING
     req = urllib2.Request(URL, data, {'Content-Type': 'application/json'})
     f = urllib2.urlopen(req)
@@ -110,7 +110,7 @@ def handle_tweet(tweet):
     if number_of_tweets >= 10:
         tweets = deepcopy(TWEETS)
         TWEETS = []
-        make_request(TEST_ID, json.dumps(tweets))
+        make_request(json.dumps(tweets))
 
 
 """ Programme """
@@ -119,4 +119,5 @@ with tweetstream.FilterStream(TWITTER_USERNAME, TWITTER_PASSWORD, locations=["-8
         if not RUNNING:
             break
         handle_tweet(tweet)
+
 */
